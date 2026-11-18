@@ -1,24 +1,22 @@
 const IGNORED_DIRECTORY_NAMES = new Set([".git", "node_modules"]);
-const HTML_PAGE_EXTENSION = /\.(html?|HTML?)$/;
+const MAX_SCAN_DEPTH = 32;
 
 async function scanDirectory(directoryHandle, parentPath = "", depth = 0, pages = []) {
-  if (depth > 32) {
+  if (depth > MAX_SCAN_DEPTH) {
     throw new Error("The repository folder structure is nested too deeply to scan safely.");
   }
 
   for await (const [entryName, entryHandle] of directoryHandle.entries()) {
     if (entryHandle.kind === "directory") {
       if (IGNORED_DIRECTORY_NAMES.has(entryName)) continue;
-      await scanDirectory(
-        entryHandle,
-        parentPath ? parentPath + "/" + entryName : entryName,
-        depth + 1,
-        pages,
-      );
+      const nextPath = parentPath ? parentPath + "/" + entryName : entryName;
+      await scanDirectory(entryHandle, nextPath, depth + 1, pages);
       continue;
     }
 
-    if (entryHandle.kind !== "file" || !HTML_PAGE_EXTENSION.test(entryName)) continue;
+    if (entryHandle.kind !== "file") continue;
+    const lowerName = entryName.toLowerCase();
+    if (!lowerName.endsWith(".html") && !lowerName.endsWith(".htm")) continue;
 
     const relativePath = parentPath ? parentPath + "/" + entryName : entryName;
     pages.push({
