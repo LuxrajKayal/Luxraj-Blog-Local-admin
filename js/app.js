@@ -115,6 +115,11 @@ async function handleRepositoryButton() {
         showToast("Reconnected to " + activeDirectoryHandle.name + ".");
         return;
       }
+
+      savedHandleNeedsPermission = false;
+      elements.repositoryButtonLabel.textContent = "Change folder";
+      showToast("Access was not restored. Click Change folder again to choose a repository.");
+      return;
     }
 
     const directoryHandle = await chooseRepositoryFolder();
