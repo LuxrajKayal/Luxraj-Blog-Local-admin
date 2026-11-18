@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="description" content="A local-first workspace for managing the Luxraj Blog repository.">
+  <title>Luxraj Local CMS</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./js/app.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="Luxraj Local CMS home">
+        <span class="brand-mark" aria-hidden="true">L</span>
+        <span class="brand-copy">
+          <span class="brand-name">LUXRAJ</span>
+          <span class="brand-product">LOCAL CMS</span>
+        </span>
+      </a>
+
+      <div class="topbar-controls">
+        <div class="branch-control" id="branch-control" hidden>
+          <label class="visually-hidden" for="branch-select">Working branch</label>
+          <span class="branch-label" aria-hidden="true">BRANCH</span>
+          <select id="branch-select" disabled aria-describedby="branch-help">
+            <option value="">No branches detected</option>
+          </select>
+        </div>
+        <button class="folder-button" id="repository-button" type="button">
+          <svg class="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M3.75 6.75A1.75 1.75 0 0 1 5.5 5h4.1l1.7 1.8h7.2A1.75 1.75 0 0 1 20.25 8.5v9A1.75 1.75 0 0 1 18.5 19.25h-13a1.75 1.75 0 0 1-1.75-1.75V6.75Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+            <path d="M3.75 9.25h16.5" stroke="currentColor" stroke-width="1.6"/>
+          </svg>
+          <span id="repository-button-label">Select local folder</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <section class="workspace" aria-labelledby="workspace-title">
+        <div class="workspace-icon" aria-hidden="true">
+          <svg viewBox="0 0 48 48" fill="none">
+            <path d="M7 13.5A4.5 4.5 0 0 1 11.5 9h9l4 4h12A4.5 4.5 0 0 1 41 17.5v17a4.5 4.5 0 0 1-4.5 4.5h-25A4.5 4.5 0 0 1 7 34.5v-21Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+            <path d="M7.5 19h33" stroke="currentColor" stroke-width="2"/>
+            <path d="M24 25v9m-4.5-4.5h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <p class="eyebrow">LOCAL-FIRST WORKSPACE</p>
+        <h1 id="workspace-title">Connect a repository to begin</h1>
+        <p class="workspace-description" id="workspace-description">
+          Select a locally stored blog repository. The CMS will inspect its Git metadata and list the local branches available in the topbar.
+        </p>
+
+        <div class="repository-summary" id="repository-summary" hidden>
+          <div class="summary-row">
+            <span class="summary-label">CONNECTED FOLDER</span>
+            <strong id="repository-name">—</strong>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">CURRENT LOCAL BRANCH</span>
+            <strong id="current-branch">—</strong>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">CMS WORKING BRANCH</span>
+            <strong id="selected-branch">—</strong>
+          </div>
+          <p class="branch-note" id="branch-help">
+            Branch selection sets the CMS workspace context only. It does not switch the actual Git branch or modify Git metadata. Use VS Code to switch branches.
+          </p>
+        </div>
+
+        <div class="status-line" id="status-line" role="status" aria-live="polite">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="status-text">No repository connected</span>
+        </div>
+        <p class="compatibility-note" id="compatibility-note">
+          Best supported in desktop Chromium browsers such as Chrome and Edge. Folder access requires a secure context (HTTPS or localhost).
+        </p>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>LUXRAJ BLOG · LOCAL CMS</span>
+      <span>Repository access stays on this device</span>
+    </footer>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>
