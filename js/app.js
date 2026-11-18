@@ -1,4 +1,5 @@
 import { discoverLocalBranches } from "./modules/branch-discovery.js";
+import { discoverHtmlPages } from "./modules/page-discovery.js";
 import { chooseRepositoryFolder, ensureRepositoryPermission, supportsLocalFolderAccess } from "./modules/repository-picker.js";
 import { getSavedWorkspace, saveSelectedBranch, saveWorkspace } from "./modules/workspace-store.js";
 
@@ -7,6 +8,7 @@ const elements = {
   repositoryButtonLabel: document.querySelector("#repository-button-label"),
   branchControl: document.querySelector("#branch-control"),
   branchSelect: document.querySelector("#branch-select"),
+  workspace: document.querySelector("#default-workspace"),
   workspaceTitle: document.querySelector("#workspace-title"),
   workspaceDescription: document.querySelector("#workspace-description"),
   repositorySummary: document.querySelector("#repository-summary"),
@@ -16,6 +18,19 @@ const elements = {
   statusLine: document.querySelector("#status-line"),
   statusText: document.querySelector("#status-text"),
   compatibilityNote: document.querySelector("#compatibility-note"),
+  metadataNav: document.querySelector("#page-metadata-nav"),
+  metadataPanel: document.querySelector("#page-metadata-panel"),
+  pageBranchInfo: document.querySelector("#page-branch-info"),
+  pageScanStatus: document.querySelector("#page-scan-status"),
+  pageCount: document.querySelector("#page-count"),
+  pagePickerTrigger: document.querySelector("#page-picker-trigger"),
+  pagePickerMenu: document.querySelector("#page-picker-menu"),
+  pagePickerValue: document.querySelector("#page-picker-value"),
+  pageOptionsList: document.querySelector("#page-options-list"),
+  pageSelectAll: document.querySelector("#page-select-all"),
+  pageCancel: document.querySelector("#page-cancel"),
+  pageDone: document.querySelector("#page-done"),
+  pageSelectionSummary: document.querySelector("#page-selection-summary"),
   toast: document.querySelector("#toast"),
 };
 
@@ -23,6 +38,10 @@ let activeDirectoryHandle = null;
 let savedHandleNeedsPermission = false;
 let repositoryInfo = null;
 let toastTimeout = null;
+let activeView = "home";
+let discoveredPages = [];
+let selectedPagePaths = new Set();
+let draftPagePaths = new Set();
 
 function setStatus(message, state = "idle") {
   elements.statusText.textContent = message;
@@ -38,7 +57,154 @@ function showToast(message) {
 
 function setBusy(isBusy, label = "Select local folder") {
   elements.repositoryButton.disabled = isBusy;
-  elements.repositoryButtonLabel.textContent = isBusy ? label : (savedHandleNeedsPermission ? "Restore folder access" : (activeDirectoryHandle ? "Change folder" : "Select local folder"));
+  elements.repositoryButtonLabel.textContent = isBusy
+    ? label
+    : (savedHandleNeedsPermission ? "Restore folder access" : (activeDirectoryHandle ? "Change folder" : "Select local folder"));
+}
+
+function setActiveView(view) {
+  activeView = view;
+  const showMetadata = view === "metadata";
+  elements.workspace.hidden = showMetadata;
+  elements.metadataPanel.hidden = !showMetadata;
+  elements.metadataNav.setAttribute("aria-current", showMetadata ? "page" : "false");
+}
+
+function setPageScanStatus(message, state = "idle") {
+  elements.pageScanStatus.textContent = message;
+  elements.pageScanStatus.dataset.state = state;
+}
+
+function updatePageBranchInfo() {
+  if (!repositoryInfo) {
+    elements.pageBranchInfo.textContent = "Connect a repository to discover its HTML pages.";
+    elements.pageBranchInfo.dataset.state = "idle";
+    return;
+  }
+
+  const selectedBranch = elements.branchSelect.value;
+  const actualBranch = repositoryInfo.currentBranch;
+
+  if (!repositoryInfo.detached && actualBranch && selectedBranch === actualBranch) {
+    elements.pageBranchInfo.textContent = "The selected CMS branch matches the local checkout (" + actualBranch + "). The list below reflects HTML files currently present in this local folder.";
+    elements.pageBranchInfo.dataset.state = "success";
+  } else {
+    const actualLabel = repositoryInfo.detached ? "a detached HEAD" : (actualBranch || "an unknown local checkout");
+    elements.pageBranchInfo.textContent = "The CMS branch selector is set to " + (selectedBranch || "no branch") + ", but this folder currently contains files from " + actualLabel + ". The page list reflects the local files on disk, not a separate Git branch snapshot. Switch branches in VS Code to change the files being scanned.";
+    elements.pageBranchInfo.dataset.state = "warning";
+  }
+}
+
+function renderPagePickerOptions() {
+  elements.pageOptionsList.replaceChildren();
+
+  if (discoveredPages.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "page-options-empty";
+    empty.textContent = "No HTML pages were found in this repository folder.";
+    elements.pageOptionsList.append(empty);
+    elements.pagePickerTrigger.disabled = true;
+    elements.pagePickerValue.textContent = "No HTML pages detected";
+    elements.pageCount.textContent = "0 pages";
+    elements.pageSelectionSummary.textContent = "No pages available to select.";
+    return;
+  }
+
+  for (const page of discoveredPages) {
+    const label = document.createElement("label");
+    label.className = "page-option";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "page-option-checkbox";
+    checkbox.dataset.pagePath = page.path;
+    checkbox.checked = draftPagePaths.has(page.path);
+
+    const text = document.createElement("span");
+    text.className = "page-option-path";
+    text.textContent = page.path;
+    text.title = page.path;
+
+    label.append(checkbox, text);
+    elements.pageOptionsList.append(label);
+  }
+
+  elements.pagePickerTrigger.disabled = false;
+  elements.pageCount.textContent = discoveredPages.length + (discoveredPages.length === 1 ? " page" : " pages");
+  updatePageSelectionDraftUI();
+}
+
+function updatePageSelectionDraftUI() {
+  const selectedCount = draftPagePaths.size;
+  const totalCount = discoveredPages.length;
+
+  elements.pagePickerValue.textContent = selectedCount === 0
+    ? "Select pages"
+    : selectedCount === totalCount
+      ? "All " + totalCount + " pages selected"
+      : selectedCount + " of " + totalCount + " pages selected";
+
+  elements.pageSelectionSummary.textContent = selectedCount + " of " + totalCount + " pages selected";
+
+  for (const checkbox of elements.pageOptionsList.querySelectorAll(".page-option-checkbox")) {
+    checkbox.checked = draftPagePaths.has(checkbox.dataset.pagePath);
+  }
+}
+
+function openPagePicker() {
+  draftPagePaths = new Set(selectedPagePaths);
+  updatePageSelectionDraftUI();
+  elements.pagePickerMenu.hidden = false;
+  elements.pagePickerTrigger.setAttribute("aria-expanded", "true");
+}
+
+function closePagePicker() {
+  elements.pagePickerMenu.hidden = true;
+  elements.pagePickerTrigger.setAttribute("aria-expanded", "false");
+}
+
+async function loadPages() {
+  if (!activeDirectoryHandle) {
+    discoveredPages = [];
+    selectedPagePaths.clear();
+    draftPagePaths.clear();
+    renderPagePickerOptions();
+    setPageScanStatus("Connect a local repository folder before scanning pages.", "warning");
+    updatePageBranchInfo();
+    return;
+  }
+
+  const permission = await ensureRepositoryPermission(activeDirectoryHandle, false);
+  if (permission !== "granted") {
+    setPageScanStatus("Repository access needs to be restored. Use the folder button in the topbar.", "warning");
+    return;
+  }
+
+  setPageScanStatus("Scanning local HTML pages…", "loading");
+  elements.pagePickerTrigger.disabled = true;
+
+  try {
+    const pages = await discoverHtmlPages(activeDirectoryHandle);
+    discoveredPages = pages;
+
+    const availablePaths = new Set(pages.map((page) => page.path));
+    selectedPagePaths = new Set([...selectedPagePaths].filter((path) => availablePaths.has(path)));
+    draftPagePaths = new Set(selectedPagePaths);
+
+    renderPagePickerOptions();
+    setPageScanStatus(
+      pages.length + (pages.length === 1 ? " HTML page discovered in the selected folder." : " HTML pages discovered in the selected folder."),
+      pages.length > 0 ? "success" : "warning",
+    );
+    updatePageBranchInfo();
+  } catch (error) {
+    console.error("Page discovery failed:", error);
+    discoveredPages = [];
+    selectedPagePaths.clear();
+    draftPagePaths.clear();
+    renderPagePickerOptions();
+    setPageScanStatus(error instanceof Error ? error.message : "Could not scan HTML pages.", "error");
+  }
 }
 
 function renderRepository(info, selectedBranch = info.currentBranch ?? "") {
@@ -56,7 +222,7 @@ function renderRepository(info, selectedBranch = info.currentBranch ?? "") {
   if (info.branchNames.length === 0) {
     const option = document.createElement("option");
     option.value = "";
-    option.textContent = "No local branches found";
+    option.textContent = "No branches found";
     elements.branchSelect.append(option);
     elements.branchSelect.disabled = true;
     elements.selectedBranch.textContent = "None detected";
@@ -81,6 +247,8 @@ function renderRepository(info, selectedBranch = info.currentBranch ?? "") {
   elements.compatibilityNote.textContent = info.detached
     ? "The repository is currently in detached HEAD state. The branch list still shows local branch references."
     : "The CMS reads branch names from local .git metadata only. It does not run Git commands or switch branches.";
+
+  updatePageBranchInfo();
 }
 
 async function inspectAndConnect(directoryHandle, { requestPermission = false, savedBranch = "" } = {}) {
@@ -98,6 +266,14 @@ async function inspectAndConnect(directoryHandle, { requestPermission = false, s
 
   await saveWorkspace(directoryHandle, initialBranch);
   renderRepository(info, initialBranch);
+
+  discoveredPages = [];
+  selectedPagePaths.clear();
+  draftPagePaths.clear();
+  renderPagePickerOptions();
+  setPageScanStatus("Open Page Metadata Filler to discover HTML pages in this folder.", "idle");
+
+  if (activeView === "metadata") await loadPages();
 }
 
 async function handleRepositoryButton() {
@@ -105,8 +281,6 @@ async function handleRepositoryButton() {
   setBusy(true, "Opening folder…");
 
   try {
-    // After a page reload, first let the user restore permission to the saved folder.
-    // Once connected, the same button opens the picker so a different folder can be selected.
     if (activeDirectoryHandle && savedHandleNeedsPermission) {
       const permission = await ensureRepositoryPermission(activeDirectoryHandle, true);
       if (permission === "granted") {
@@ -147,10 +321,43 @@ async function handleBranchChange(event) {
     } else {
       setStatus("CMS context set to " + nextBranch + " · local files unchanged", "warning");
     }
+    updatePageBranchInfo();
   } catch (error) {
     console.error("Could not save the selected branch:", error);
     showToast("The branch was selected for this session, but the selection could not be saved in browser storage.");
   }
+}
+
+function handlePageOptionChange(event) {
+  const checkbox = event.target.closest(".page-option-checkbox");
+  if (!checkbox) return;
+
+  if (checkbox.checked) draftPagePaths.add(checkbox.dataset.pagePath);
+  else draftPagePaths.delete(checkbox.dataset.pagePath);
+  updatePageSelectionDraftUI();
+}
+
+function handleSelectAllPages() {
+  draftPagePaths = new Set(discoveredPages.map((page) => page.path));
+  updatePageSelectionDraftUI();
+}
+
+function handleCancelPageSelection() {
+  draftPagePaths = new Set(selectedPagePaths);
+  updatePageSelectionDraftUI();
+  closePagePicker();
+}
+
+function handleDonePageSelection() {
+  selectedPagePaths = new Set(draftPagePaths);
+  updatePageSelectionDraftUI();
+  closePagePicker();
+  showToast(selectedPagePaths.size + (selectedPagePaths.size === 1 ? " page selected." : " pages selected."));
+}
+
+function handlePageMetadataNavigation() {
+  setActiveView("metadata");
+  loadPages();
 }
 
 async function restoreSavedWorkspace() {
@@ -187,6 +394,22 @@ async function restoreSavedWorkspace() {
 
 elements.repositoryButton.addEventListener("click", handleRepositoryButton);
 elements.branchSelect.addEventListener("change", handleBranchChange);
+elements.metadataNav.addEventListener("click", handlePageMetadataNavigation);
+elements.pagePickerTrigger.addEventListener("click", () => {
+  if (elements.pagePickerMenu.hidden) openPagePicker();
+  else closePagePicker();
+});
+elements.pageOptionsList.addEventListener("change", handlePageOptionChange);
+elements.pageSelectAll.addEventListener("click", handleSelectAllPages);
+elements.pageCancel.addEventListener("click", handleCancelPageSelection);
+elements.pageDone.addEventListener("click", handleDonePageSelection);
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !elements.pagePickerMenu.hidden) {
+    handleCancelPageSelection();
+    elements.pagePickerTrigger.focus();
+  }
+});
 
 restoreSavedWorkspace().catch((error) => {
   console.error("Workspace restoration failed:", error);
