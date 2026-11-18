@@ -1,69 +1,92 @@
 # Luxraj Blog Local CMS
 
-A modular, local-first CMS starter for the Luxraj Blog website. The application is a static web app designed to run from GitHub Pages or from a local development server.
+A static, modular CMS for locally checked-out Git repositories. The UI runs over HTTPS or localhost in a desktop Chromium browser with the File System Access API; it does not use GitHub tokens or a backend.
 
-## Current milestone: repository connection and branch discovery
+## Implemented modules
 
-This first slice provides:
+### Page Metadata Filler
 
-- A minimal topbar with a local-folder picker.
-- Local repository validation by checking for a \`.git\` directory.
-- Read-only discovery of local branch names from \`.git/refs/heads\` and \`.git/packed-refs\`.
-- Detection of the currently checked-out branch from \`.git/HEAD\`.
-- A topbar dropdown populated with the discovered local branches.
-- Persistence of the selected directory handle and CMS branch context in IndexedDB.
-- Permission checks when the saved workspace is restored.
+1. Select a local Git repository folder. The topbar shows the local branch names and checked-out branch.
+2. Open **Page Metadata Filler**. The first dropdown contains only HTML files with `data-luxraj-seo="true"` on their root `<html>` element (or the configured SEO marker). All eligible pages are checked by default. Uncheck pages and click Done to pass the confirmed selection onward.
+3. Open **Page ID Population**. Only pages passed from the first dropdown are listed. A Page ID meta tag whose content equals `{{PAGE_ID}}` (or the configured placeholder) is eligible for bulk population. Filled IDs appear gray and cannot be bulk-selected, but the pencil button permits deliberate manual editing. Missing/invalid Page ID tags are reported and cannot be silently created.
+4. Choose placeholders, preview generated IDs, then explicitly confirm writing those values into the actual local source HTML files. Only the Page ID meta `content` attribute is updated.
 
-## Important: what branch selection means
+The editor validates IDs and checks for duplicate permanent values throughout the connected local HTML tree, including files not selected in the first dropdown. Generated sequences start after the highest permanent value in their numbering group and never recycle earlier gaps. Unknown or overlapping rules prevent bulk writes.
 
-The branch dropdown sets the CMS workspace context only. It does **not** switch the actual checked-out Git branch. This application does not run Git commands, write to \`.git\`, commit, push, or connect to the GitHub API. If you need to change the actual working branch, do that in VS Code first, then reconnect or refresh the selected folder in the CMS.
+### Page ID Pattern Studio
 
-The CMS does not currently modify any files inside the selected repository. This milestone only reads repository metadata and saves the selected folder handle and branch preference in the browser's IndexedDB.
+The separate **Page ID Pattern Studio** page displays a collapsible map of HTML files in the selected working tree. It supports:
+
+- Editing path-based match expressions such as `site/categories/{category}/{topic}/articles/{page}.html`.
+- Editing naming patterns such as `article-{category}-{topic}-{nn}`.
+- Setting numbering start, digit width, increment and scope (topic, category, parent folder, entire rule or custom named capture groups).
+- Adding and removing rules using the selected file/folder as a starting point.
+- Editing SEO marker name, Page ID meta name and placeholder convention.
+- A live, read-only preview with conflict reporting.
+- Saving a profile in IndexedDB **for the connected directory handle**, separately from profiles for other repositories.
+- Exporting/importing a JSON profile to share settings across machines.
+
+The built-in rules default to the Luxraj Blog hierarchy:
+
+| Source path | ID |
+| --- | --- |
+| `site/index.html` | `site-home-00` |
+| `site/pages/privacy.html` | `site-privacy-00` |
+| `site/categories/tech-news/tech-news-index.html` | `main-landing-technews-00` |
+| `site/categories/hardware/peripherals/hardware-peripherals-index.html` | `sub-landing-hardware-peripherals-00` |
+| `site/categories/engineering/drone-technology/articles/*.html` | `article-engineering-dronetechnology-01`, `02`, etc. |
+
+All generated naming components are normalized to lowercase alphanumeric tokens, so `drone-technology` becomes `dronetechnology`.
+
+Other repositories can use the default as a starting template, then configure their own folder mapping, HTML conventions, ID patterns, and numbering. Unmatched files are never assigned a guessed ID. Source files must already contain their configured Page ID meta element; the CMS intentionally does not inject missing structural elements.
+
+## Safety
+
+- The browser folder picker requests read/write access. Page ID writing requires a separately confirmed action.
+- Before writing, the selected CMS branch must match the actual checked-out local Git branch. Selecting a branch in the topbar **does not** switch the checkout; switch in VS Code instead.
+- Before applying a bulk preview, the CMS rescans existing IDs and checks the exact source text and generated IDs again. All planned source files are rechecked before any write.
+- If writing fails midway, the CMS attempts to restore earlier files and reports rollback failures. Multi-file operations are not filesystem-atomic; inspect source changes in Git after writing.
+- No Git commands, commits, pushes or deployments are performed by this CMS.
+- User-provided names and paths are inserted in the UI using DOM text nodes, not interpreted as HTML.
+- Profiles saved in IndexedDB are browser-local. Export JSON to preserve or transfer them.
 
 ## Run locally
 
-Use a secure local origin. For example, from this repository directory:
-
-\`\`\`bash
+```bash
 python -m http.server 8000
-\`\`\`
+```
 
-Then open \`http://localhost:8000\` in a supported browser. Alternatively, use the VS Code Live Server extension.
+Visit `http://localhost:8000` in Chrome or Edge on desktop, or serve the repository root with VS Code Live Server. HTTPS also works.
 
-## Browser support
+## Tests
 
-The local-folder picker uses the File System Access API (\`showDirectoryPicker\`). Use a recent desktop Chromium browser such as Google Chrome or Microsoft Edge. The API requires a secure context, which includes HTTPS and localhost. Other browsers may not expose the required folder-picker API.
+```bash
+npm test
+```
 
-The selected directory handle is stored in IndexedDB. Browser security rules may require the user to grant folder permission again after a restart, browser update, permission change, or storage cleanup. The folder's absolute filesystem path is not exposed by the browser API; the CMS remembers the folder handle rather than a path string.
-
-## Git metadata currently supported
-
-- Standard repositories containing a \`.git\` directory.
-- Loose local branch refs under \`.git/refs/heads\`.
-- Packed local branch refs in \`.git/packed-refs\`.
-- Current branch detection through \`.git/HEAD\`.
-
-Linked worktrees and submodules where \`.git\` is a pointer file are not supported in this first milestone. Remote-tracking branches are intentionally not listed; only local branches are shown.
+The test suite covers SEO eligibility, Luxraj patterns, custom numbering, duplicate protection, HTML edits, stale preview rejection and attempted rollback.
 
 ## Project structure
 
-\`\`\`text
-.
-├── index.html
-├── styles.css
-├── js/
-│   ├── app.js
-│   └── modules/
-│       ├── branch-discovery.js
-│       ├── repository-picker.js
-│       └── workspace-store.js
-└── README.md
-\`\`\`
-
-## Hosting on GitHub Pages
-
-This is a static application with no build step. Once GitHub Pages is enabled for the repository, publish the repository root (or the selected Pages source directory). Open the published HTTPS URL in a supported browser and select the local blog repository folder.
-
-## Security and scope
-
-The folder picker is user initiated. The browser asks for access to the selected local directory. The application source contains no GitHub token, no remote repository API calls, and no push or commit functionality.
+```text
+js/
+  app.js                         # workflow and navigation coordinator
+  modules/
+    file-tree.js                 # local HTML traversal and file handles
+    seo-eligibility.js           # enabled root SEO marker
+    page-discovery.js            # first dropdown eligible pages
+    page-id/
+      default-profile.js         # editable Luxraj defaults
+      reader.js                  # inspect and replace the Page ID meta content
+      pattern-engine.js          # path matching, captures and ID rendering
+      numbering-engine.js        # permanent sequence allocation
+      generator.js               # pure bulk plan and collision detection
+      validator.js               # profile, ID and match validation
+      workspace-scanner.js       # read all Page IDs, including unselected files
+      writer.js                  # local file preflight, write and recovery
+    pattern-studio/
+      profile-storage.js         # per-repository IndexedDB settings
+  ui/
+    page-id-selector.js          # second dropdown, manual editor and bulk preview
+    pattern-studio.js            # file map and editable rule interface
+```

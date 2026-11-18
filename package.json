@@ -1,0 +1,8 @@
+{
+  "name": "luxraj-blog-local-admin",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test && node --check js/app.js && node --check js/ui/page-id-selector.js && node --check js/ui/pattern-studio.js"
+  }
+}
