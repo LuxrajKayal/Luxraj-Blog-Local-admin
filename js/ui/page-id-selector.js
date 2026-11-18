@@ -151,7 +151,14 @@ export function createPageIdSelector({ getRoot, getProfile, getSelectedPaths, as
       }
       const accepted = window.confirm("Save Page ID " + id + " in " + editingPath + "? This changes the local source HTML file.");
       if (!accepted) return;
-      await applyPageIdChanges(getRoot(), [{ path: editingPath, original: current.source, nextValue: id, allowAssigned: true }], getProfile());
+      // Revalidate the repository-wide identity set after the confirmation dialog.
+      const latest = await scanPageIdRecords(getRoot(), getProfile());
+      validateManualId(id, latest, editingPath, getProfile().pageIdPlaceholder);
+      const latestCurrent = latest.find(item => item.path === editingPath);
+      if (!latestCurrent || latestCurrent.source !== current.source) {
+        throw new Error("Source HTML changed since the manual editor opened. Rescan before saving.");
+      }
+      await applyPageIdChanges(getRoot(), [{ path: editingPath, original: latestCurrent.source, nextValue: id, allowAssigned: true }], getProfile());
       hideEditor();
       notify("Saved Page ID in " + editingPath + ". No Git commit was created.");
       await refresh();
