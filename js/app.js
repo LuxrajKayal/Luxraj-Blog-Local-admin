@@ -1,5 +1,9 @@
 import { discoverLocalBranches } from "./modules/branch-discovery.js";
 import { discoverHtmlPages } from "./modules/page-discovery.js";
+import { createLuxrajProfile } from "./modules/page-id/default-profile.js";
+import { loadRepositoryProfile } from "./modules/pattern-studio/profile-storage.js";
+import { createPageIdSelector } from "./ui/page-id-selector.js";
+import { createPatternStudio } from "./ui/pattern-studio.js";
 import { chooseRepositoryFolder, ensureRepositoryPermission, supportsLocalFolderAccess } from "./modules/repository-picker.js";
 import { getSavedWorkspace, saveSelectedBranch, saveWorkspace } from "./modules/workspace-store.js";
 
@@ -19,6 +23,8 @@ const elements = {
   statusText: document.querySelector("#status-text"),
   compatibilityNote: document.querySelector("#compatibility-note"),
   metadataNav: document.querySelector("#page-metadata-nav"),
+  patternStudioNav: document.querySelector("#pattern-studio-nav"),
+  patternStudioPanel: document.querySelector("#pattern-studio-panel"),
   metadataPanel: document.querySelector("#page-metadata-panel"),
   pageBranchInfo: document.querySelector("#page-branch-info"),
   pageScanStatus: document.querySelector("#page-scan-status"),
@@ -42,6 +48,38 @@ let activeView = "home";
 let discoveredPages = [];
 let selectedPagePaths = new Set();
 let draftPagePaths = new Set();
+let activePageIdProfile = createLuxrajProfile();
+
+// The UI controllers own their own state and keep app.js as the workflow coordinator.
+const pageIdSelector = createPageIdSelector({
+  getRoot: () => activeDirectoryHandle,
+  getProfile: () => activePageIdProfile,
+  getSelectedPaths: () => new Set(selectedPagePaths),
+  assertWritable: assertLocalWriteAllowed,
+  notify: showToast,
+});
+const patternStudio = createPatternStudio({
+  getRoot: () => activeDirectoryHandle,
+  getProfile: () => activePageIdProfile,
+  onSave: async profile => {
+    activePageIdProfile = profile;
+    await loadPages();
+  },
+  notify: showToast,
+});
+
+async function assertLocalWriteAllowed() {
+  const repository = activeDirectoryHandle;
+  if (!repository) throw new Error("Connect a local repository before writing Page IDs.");
+  const permission = await ensureRepositoryPermission(repository, true);
+  if (permission !== "granted") throw new Error("Write permission is required to update local HTML files.");
+  const checkout = await discoverLocalBranches(repository);
+  if (!checkout.currentBranch || checkout.detached || checkout.currentBranch !== elements.branchSelect.value) {
+    throw new Error("The CMS branch selector must match the actual local Git checkout before Page IDs can be written.");
+  }
+  if (repository !== activeDirectoryHandle) throw new Error("Connected repository changed during validation.");
+}
+
 
 function setStatus(message, state = "idle") {
   elements.statusText.textContent = message;
@@ -64,10 +102,11 @@ function setBusy(isBusy, label = "Select local folder") {
 
 function setActiveView(view) {
   activeView = view;
-  const showMetadata = view === "metadata";
-  elements.workspace.hidden = showMetadata;
-  elements.metadataPanel.hidden = !showMetadata;
-  elements.metadataNav.setAttribute("aria-current", showMetadata ? "page" : "false");
+  elements.workspace.hidden = view !== "home";
+  elements.metadataPanel.hidden = view !== "metadata";
+  elements.patternStudioPanel.hidden = view !== "patterns";
+  elements.metadataNav.setAttribute("aria-current", view === "metadata" ? "page" : "false");
+  elements.patternStudioNav.setAttribute("aria-current", view === "patterns" ? "page" : "false");
 }
 
 function setPageScanStatus(message, state = "idle") {
@@ -101,7 +140,7 @@ function renderPagePickerOptions() {
   if (discoveredPages.length === 0) {
     const empty = document.createElement("p");
     empty.className = "page-options-empty";
-    empty.textContent = "No HTML pages were found in this repository folder.";
+    empty.textContent = "No SEO-eligible HTML pages were found. Check the enabled marker or Pattern Studio settings.";
     elements.pageOptionsList.append(empty);
     elements.pagePickerTrigger.disabled = true;
     elements.pagePickerValue.textContent = "No HTML pages detected";
@@ -169,6 +208,7 @@ async function loadPages() {
     selectedPagePaths.clear();
     draftPagePaths.clear();
     renderPagePickerOptions();
+    pageIdSelector.reset();
     setPageScanStatus("Connect a local repository folder before scanning pages.", "warning");
     updatePageBranchInfo();
     return;
@@ -177,6 +217,7 @@ async function loadPages() {
   const permission = await ensureRepositoryPermission(activeDirectoryHandle, false);
   if (permission !== "granted") {
     setPageScanStatus("Repository access needs to be restored. Use the folder button in the topbar.", "warning");
+    pageIdSelector.reset();
     return;
   }
 
@@ -184,18 +225,24 @@ async function loadPages() {
   elements.pagePickerTrigger.disabled = true;
 
   try {
-    const pages = await discoverHtmlPages(activeDirectoryHandle);
+    const pages = await discoverHtmlPages(activeDirectoryHandle, { seoAttribute: activePageIdProfile.seoAttribute });
+    const previouslyDiscovered = new Set(discoveredPages.map(page => page.path));
+    const previouslySelected = new Set(selectedPagePaths);
     discoveredPages = pages;
 
-    const availablePaths = new Set(pages.map((page) => page.path));
-    selectedPagePaths = new Set([...selectedPagePaths].filter((path) => availablePaths.has(path)));
+    // First discovery auto-selects all eligible pages. Later scans preserve manual
+    // exclusions while automatically selecting newly eligible paths.
+    selectedPagePaths = new Set(pages
+      .filter(page => !previouslyDiscovered.has(page.path) || previouslySelected.has(page.path))
+      .map(page => page.path));
     draftPagePaths = new Set(selectedPagePaths);
 
     renderPagePickerOptions();
     setPageScanStatus(
-      pages.length + (pages.length === 1 ? " HTML page discovered in the selected folder." : " HTML pages discovered in the selected folder."),
+      pages.length + (pages.length === 1 ? " SEO-eligible HTML page found." : " SEO-eligible HTML pages found."),
       pages.length > 0 ? "success" : "warning",
     );
+    await pageIdSelector.refresh();
     updatePageBranchInfo();
   } catch (error) {
     console.error("Page discovery failed:", error);
@@ -203,6 +250,7 @@ async function loadPages() {
     selectedPagePaths.clear();
     draftPagePaths.clear();
     renderPagePickerOptions();
+    pageIdSelector.reset();
     setPageScanStatus(error instanceof Error ? error.message : "Could not scan HTML pages.", "error");
   }
 }
@@ -211,7 +259,7 @@ function renderRepository(info, selectedBranch = info.currentBranch ?? "") {
   repositoryInfo = info;
   elements.repositoryButtonLabel.textContent = "Change folder";
   elements.workspaceTitle.textContent = "Repository connected";
-  elements.workspaceDescription.textContent = "The CMS has inspected the selected folder and discovered its local branches. This starter workspace is read-only apart from remembering your branch selection.";
+  elements.workspaceDescription.textContent = "The CMS has inspected the selected folder and discovered its local branches. Page Metadata Filler can update local source HTML after preview and confirmation. No Git commits are created automatically.";
   elements.repositorySummary.hidden = false;
   elements.repositoryName.textContent = info.repositoryName;
   elements.currentBranch.textContent = info.detached ? "Detached HEAD" : (info.currentBranch || "Unknown");
@@ -265,15 +313,19 @@ async function inspectAndConnect(directoryHandle, { requestPermission = false, s
     : (info.currentBranch ?? info.branchNames[0] ?? "");
 
   await saveWorkspace(directoryHandle, initialBranch);
+  const storedProfile = await loadRepositoryProfile(directoryHandle);
+  activePageIdProfile = storedProfile.profile;
   renderRepository(info, initialBranch);
 
   discoveredPages = [];
   selectedPagePaths.clear();
   draftPagePaths.clear();
+  pageIdSelector.reset();
   renderPagePickerOptions();
-  setPageScanStatus("Open Page Metadata Filler to discover HTML pages in this folder.", "idle");
+  setPageScanStatus("Open Page Metadata Filler to discover SEO-eligible HTML pages in this folder.", "idle");
 
   if (activeView === "metadata") await loadPages();
+  if (activeView === "patterns") await patternStudio.open();
 }
 
 async function handleRepositoryButton() {
@@ -322,6 +374,7 @@ async function handleBranchChange(event) {
       setStatus("CMS context set to " + nextBranch + " · local files unchanged", "warning");
     }
     updatePageBranchInfo();
+    pageIdSelector.invalidatePreview();
   } catch (error) {
     console.error("Could not save the selected branch:", error);
     showToast("The branch was selected for this session, but the selection could not be saved in browser storage.");
@@ -352,6 +405,7 @@ function handleDonePageSelection() {
   selectedPagePaths = new Set(draftPagePaths);
   updatePageSelectionDraftUI();
   closePagePicker();
+  pageIdSelector.refresh().catch(error => showToast(error.message));
   showToast(selectedPagePaths.size + (selectedPagePaths.size === 1 ? " page selected." : " pages selected."));
 }
 
@@ -385,6 +439,17 @@ async function handlePageMetadataNavigation() {
   }
 
   await loadPages();
+}
+
+async function handlePatternStudioNavigation() {
+  setActiveView("patterns");
+  try {
+    if (activeDirectoryHandle) await refreshLocalBranchSnapshot();
+    await patternStudio.open();
+  } catch (error) {
+    console.error("Pattern Studio navigation failed:", error);
+    showToast(error.message);
+  }
 }
 
 async function restoreSavedWorkspace() {
@@ -422,6 +487,7 @@ async function restoreSavedWorkspace() {
 elements.repositoryButton.addEventListener("click", handleRepositoryButton);
 elements.branchSelect.addEventListener("change", handleBranchChange);
 elements.metadataNav.addEventListener("click", handlePageMetadataNavigation);
+elements.patternStudioNav.addEventListener("click", handlePatternStudioNavigation);
 elements.pagePickerTrigger.addEventListener("click", () => {
   if (elements.pagePickerMenu.hidden) openPagePicker();
   else closePagePicker();

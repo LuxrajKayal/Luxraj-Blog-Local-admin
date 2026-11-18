@@ -52,6 +52,12 @@
             </svg>
             <span class="sidebar-item-label">Page Metadata Filler</span>
           </button>
+          <button class="sidebar-item" id="pattern-studio-nav" type="button" aria-current="false" title="Page ID Pattern Studio">
+            <svg class="sidebar-item-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M4 5h16v14H4zM8 9h8M8 13h5M8 17h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+            <span class="sidebar-item-label">Page ID Pattern Studio</span>
+          </button>
         </nav>
       </details>
 
@@ -84,7 +90,7 @@
             <div>
               <p class="eyebrow">CONTENT TOOLS</p>
               <h1 id="metadata-panel-title">Page Metadata Filler</h1>
-              <p class="metadata-panel-description">Choose the HTML pages you want to work with. Select individual pages or select every discovered page.</p>
+              <p class="metadata-panel-description">Pages with data-luxraj-seo="true" are automatically checked. Uncheck any pages you do not want to pass to Page ID Population.</p>
             </div>
             <span class="metadata-panel-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none">
@@ -97,7 +103,7 @@
           <div class="page-picker-card">
             <div class="page-picker-heading">
               <div>
-                <h2>Choose pages</h2>
+                <h2>1 · SEO Eligible Pages</h2>
                 <p id="page-scan-status" data-state="idle" role="status" aria-live="polite">Connect a repository to begin scanning.</p>
               </div>
               <span class="page-count" id="page-count">0 pages</span>
@@ -123,8 +129,134 @@
             </div>
             <div class="page-picker-footnote">
               <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="10" cy="10" r="7.25" stroke="currentColor" stroke-width="1.4"/><path d="M10 9v4M10 6.2h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-              <span>Only HTML and HTM files are listed. Selecting pages does not modify them.</span>
+              <span>Only HTML/HTM files with the enabled root SEO marker appear. New eligible pages are selected automatically; Done passes your selection to Page ID Population.</span>
             </div>
+          </div>
+
+          <div class="page-picker-card">
+            <div class="page-picker-heading">
+              <div>
+                <h2>2 · Page ID Population</h2>
+                <p>Only the pages confirmed above appear here. Filled IDs are gray and excluded from bulk generation; use the pencil to edit manually.</p>
+              </div>
+              <span class="page-count" id="page-id-count">0 pages</span>
+            </div>
+            <div class="page-picker-wrap">
+              <button class="page-picker-trigger" id="page-id-picker-trigger" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="page-id-picker-menu" disabled>
+                <span id="page-id-picker-value">Select SEO pages first</span>
+                <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m5 7.5 5 5 5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <div class="page-picker-menu" id="page-id-picker-menu" role="dialog" aria-label="Page ID population" hidden>
+                <div class="page-picker-menu-toolbar">
+                  <div class="id-actions">
+                    <button class="page-menu-action" id="page-id-select-all" type="button">Select placeholders</button>
+                    <button class="page-menu-cancel" id="page-id-clear" type="button">Clear</button>
+                  </div>
+                  <span class="page-selection-summary" id="page-id-summary">0 placeholders</span>
+                </div>
+                <div class="page-options-list" id="page-id-options"></div>
+              </div>
+            </div>
+            <div class="id-actions id-actions--foot">
+              <button class="page-menu-cancel" id="page-id-refresh" type="button">Rescan Page IDs</button>
+              <button class="page-menu-done" id="page-id-bulk" type="button" disabled>Preview bulk Page IDs</button>
+            </div>
+            <div class="id-editor" id="page-id-editor" hidden>
+              <h3>Manual Page ID editor</h3>
+              <p id="page-id-editor-path"></p>
+              <label for="page-id-editor-input">Page ID</label>
+              <input id="page-id-editor-input" type="text" maxlength="200" autocomplete="off" spellcheck="false" placeholder="Enter a unique Page ID">
+              <p class="id-feedback" data-state="error" id="page-id-editor-error" role="alert"></p>
+              <div class="id-actions">
+                <button class="page-menu-cancel" id="page-id-editor-cancel" type="button">Cancel</button>
+                <button class="page-menu-done" id="page-id-editor-save" type="button">Save Page ID locally</button>
+              </div>
+            </div>
+            <div class="id-preview" id="page-id-preview" hidden>
+              <h3>Bulk population preview</h3>
+              <div id="page-id-preview-rows" class="id-preview-list"></div>
+              <p class="id-feedback" id="page-id-preview-errors" role="status"></p>
+              <div class="id-actions">
+                <button class="page-menu-cancel" id="page-id-preview-cancel" type="button">Dismiss</button>
+                <button class="page-menu-done" id="page-id-preview-apply" type="button" disabled>Confirm and write source HTML</button>
+              </div>
+            </div>
+            <p class="page-picker-footnote">Only Page ID content values are changed. Nothing is pushed or committed to Git automatically.</p>
+          </div>
+        </section>
+
+        <section class="metadata-panel studio-panel" id="pattern-studio-panel" aria-labelledby="pattern-studio-title" hidden>
+          <div class="metadata-panel-header">
+            <div>
+              <p class="eyebrow">REPOSITORY CONFIGURATION</p>
+              <h1 id="pattern-studio-title">Page ID Pattern Studio</h1>
+              <p class="metadata-panel-description">Explore the local HTML file map, customize Page ID hierarchy rules and numbering, and save an independent profile for this repository.</p>
+            </div>
+          </div>
+          <p class="page-branch-info" id="studio-status" role="status">Connect a repository to begin.</p>
+          <div class="studio-grid">
+            <div class="page-picker-card">
+              <div class="page-picker-heading"><h2>Repository file map</h2></div>
+              <p class="studio-help" id="studio-selected-file">Select a folder or HTML file to inspect its rule.</p>
+              <div class="studio-file-tree" id="studio-file-tree" role="tree" aria-label="Local HTML file hierarchy"></div>
+              <p class="studio-help">Use Add rule to apply a pattern to the selected file or folder. You can edit the path expression to include {category}, {topic}, {page} or your own capture names.</p>
+            </div>
+            <div class="page-picker-card studio-editor">
+              <div class="page-picker-heading"><h2>Page ID naming patterns</h2></div>
+              <label for="studio-rule-list">Rule</label>
+              <select id="studio-rule-list"></select>
+              <div class="id-actions">
+                <button class="page-menu-action" type="button" id="studio-add-rule">Add rule</button>
+                <button class="page-menu-cancel" type="button" id="studio-remove-rule">Remove rule</button>
+              </div>
+              <label for="studio-rule-label">Rule label</label>
+              <input id="studio-rule-label" type="text" placeholder="Articles">
+              <label for="studio-rule-match">Relative HTML path match</label>
+              <input id="studio-rule-match" type="text" spellcheck="false" placeholder="site/categories/{category}/{topic}/articles/{page}.html">
+              <label for="studio-rule-template">Generated ID template</label>
+              <input id="studio-rule-template" type="text" spellcheck="false" placeholder="article-{category}-{topic}-{nn}">
+              <p class="studio-help">Named captures are read from the path. {nn} inserts a sequence number. Replacing rules never renumbers existing IDs.</p>
+              <fieldset id="studio-number-settings">
+                <legend>Sequence numbering</legend>
+                <div class="studio-number-grid">
+                  <label>Start <input id="studio-start" type="number" min="0" step="1" value="1"></label>
+                  <label>Width <input id="studio-width" type="number" min="1" max="10" value="2"></label>
+                  <label>Increment <input id="studio-step" type="number" min="1" step="1" value="1"></label>
+                  <label>Scope <select id="studio-scope">
+                    <option value="topic">Per topic</option>
+                    <option value="category">Per category</option>
+                    <option value="global">Global for rule</option>
+                  </select></label>
+                </div>
+              </fieldset>
+              <h3>Source HTML conventions</h3>
+              <label for="studio-seo-attribute">SEO eligibility attribute</label>
+              <input id="studio-seo-attribute" type="text" spellcheck="false">
+              <label for="studio-meta-name">Page ID meta name</label>
+              <input id="studio-meta-name" type="text" spellcheck="false">
+              <label for="studio-placeholder">Page ID placeholder</label>
+              <input id="studio-placeholder" type="text" spellcheck="false">
+              <label for="studio-root-hint">Source directory (reference)</label>
+              <input id="studio-root-hint" type="text" spellcheck="false">
+              <p class="studio-help">File matches are relative to the selected repository root. The source directory is an informational hint; each path rule determines which files are classified.</p>
+            </div>
+          </div>
+          <div class="page-picker-card">
+            <div class="page-picker-heading">
+              <h2>Live generated ID preview</h2>
+              <span class="page-count">Read-only</span>
+            </div>
+            <div id="studio-preview" class="id-preview-list"></div>
+            <p id="studio-feedback" class="id-feedback" role="status"></p>
+            <div class="id-actions id-actions--foot">
+              <button id="studio-reset" class="page-menu-cancel" type="button">Reset draft to Luxraj defaults</button>
+              <button id="studio-export" class="page-menu-cancel" type="button">Export JSON</button>
+              <label class="id-file-label">Import JSON
+                <input id="studio-import" type="file" accept="application/json,.json">
+              </label>
+              <button id="studio-save" class="page-menu-done" type="button">Save repository pattern profile</button>
+            </div>
+            <p class="page-picker-footnote">Patterns are saved in this browser for the connected local folder. Export JSON to share them with another computer. Saving patterns never edits HTML.</p>
           </div>
         </section>
       </main>
