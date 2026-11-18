@@ -96,8 +96,10 @@ button:focus-visible, select:focus-visible, a:focus-visible, .sidebar-toggle:foc
   min-height: 44px; display: flex; align-items: center; gap: 12px;
   padding: 0 11px; border: 1px solid rgba(6, 182, 212, 0.2); border-radius: 9px;
   background: linear-gradient(100deg, rgba(6, 182, 212, 0.13), rgba(6, 182, 212, 0.045));
-  color: #b9f3fb; font-size: 12px; font-weight: 650; white-space: nowrap;
+  width: 100%; color: #b9f3fb; font-family: inherit; font-size: 12px; font-weight: 650; white-space: nowrap;
+  text-align: left; cursor: pointer;
 }
+.sidebar-item:hover { border-color: rgba(6, 182, 212, 0.42); background: linear-gradient(100deg, rgba(6, 182, 212, 0.18), rgba(6, 182, 212, 0.075)); }
 .sidebar-item-icon { width: 18px; height: 18px; flex: 0 0 auto; color: #67e8f9; }
 .sidebar-item-label { overflow: hidden; text-overflow: ellipsis; }
 .sidebar:not([open]) .sidebar-content { padding: 18px 9px; }
