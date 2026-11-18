@@ -1,6 +1,6 @@
 import { scanPageIdRecords } from "../modules/page-id/workspace-scanner.js";
 import { planBulkPageIds } from "../modules/page-id/generator.js";
-import { validateManualId, detectExistingIdConflicts } from "../modules/page-id/validator.js";
+import { validateManualId } from "../modules/page-id/validator.js";
 import { applyPageIdChanges } from "../modules/page-id/writer.js";
 
 function el(id) { return document.getElementById(id); }
@@ -140,7 +140,7 @@ export function createPageIdSelector({ getRoot, getProfile, getSelectedPaths, as
     try {
       await assertWritable();
       const fresh = await scanPageIdRecords(getRoot(), getProfile());
-      if (detectExistingIdConflicts(fresh).length) throw new Error("Duplicate existing Page IDs must be resolved before editing.");
+      // Manual editing can repair a duplicate ID; only the proposed new value must be unique.
       const current = fresh.find(item => item.path === editingPath);
       if (!current) throw new Error("Page disappeared from the connected repository.");
       const id = validateManualId(ui.editorInput.value, fresh, editingPath, getProfile().pageIdPlaceholder);

@@ -42,7 +42,9 @@ export function validateProfile(profile) {
       if (!n || !Number.isInteger(n.start) || n.start < 0 ||
           !Number.isInteger(n.step) || n.step < 1 ||
           !Number.isInteger(n.width) || n.width < 1 || n.width > 10 ||
-          !["topic", "category", "global"].includes(n.scope)) {
+          !["topic", "category", "folder", "global", "custom"].includes(n.scope) ||
+          (n.scope === "custom" && (!/^[a-z][a-z0-9_]*(?:,\s*[a-z][a-z0-9_]*)*$/i.test(n.groupBy || "") ||
+            n.groupBy.split(",").map(name => name.trim()).some(name => !variables.includes(name))))) {
         throw new Error("Invalid numbering settings for " + rule.label);
       }
     }

@@ -19,7 +19,7 @@ export function planBulkPageIds(records, selectedPaths, profile) {
     try {
       const matching = classifyPage(path, profile.rules);
       if (!matching) throw new Error("No naming rule matches this file.");
-      const number = matching.rule.template.includes("{nn}") ? allocate(matching.rule, matching.captures) : null;
+      const number = matching.rule.template.includes("{nn}") ? allocate(matching.rule, matching.captures, path) : null;
       const value = renderId(matching.rule.template, matching.captures, number, matching.rule.numbering?.width || 2);
       if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value)) throw new Error("Generated ID contains invalid characters.");
       if (used.has(value)) throw new Error("ID " + value + " conflicts with " + used.get(value));

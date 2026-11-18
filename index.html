@@ -225,9 +225,14 @@
                   <label>Scope <select id="studio-scope">
                     <option value="topic">Per topic</option>
                     <option value="category">Per category</option>
+                    <option value="folder">Per parent folder</option>
                     <option value="global">Global for rule</option>
+                    <option value="custom">Custom captures</option>
                   </select></label>
                 </div>
+                <label id="studio-group-by-row" hidden>Custom captures (comma-separated)
+                  <input id="studio-group-by" type="text" spellcheck="false" placeholder="category,topic">
+                </label>
               </fieldset>
               <h3>Source HTML conventions</h3>
               <label for="studio-seo-attribute">SEO eligibility attribute</label>

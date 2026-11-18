@@ -1,4 +1,4 @@
-import { walkHtmlFiles } from "../modules/file-tree.js";
+import { isSeoEligible } from "../modules/seo-eligibility.js";
 import { createLuxrajProfile, cloneProfile } from "../modules/page-id/default-profile.js";
 import { readPageId } from "../modules/page-id/reader.js";
 import { scanPageIdRecords } from "../modules/page-id/workspace-scanner.js";
@@ -17,6 +17,7 @@ export function createPatternStudio({ getRoot, getProfile, onSave, notify }) {
     label: el("studio-rule-label"), match: el("studio-rule-match"),
     template: el("studio-rule-template"), numbered: el("studio-number-settings"),
     start: el("studio-start"), width: el("studio-width"), step: el("studio-step"), scope: el("studio-scope"),
+    groupBy: el("studio-group-by"), groupByRow: el("studio-group-by-row"),
     seoAttribute: el("studio-seo-attribute"), metaName: el("studio-meta-name"),
     placeholder: el("studio-placeholder"), rootHint: el("studio-root-hint"),
     preview: el("studio-preview"), feedback: el("studio-feedback"),
@@ -49,7 +50,7 @@ export function createPatternStudio({ getRoot, getProfile, onSave, notify }) {
   }
   function renderRuleForm() {
     const rule = currentRule();
-    for (const field of [ui.label, ui.match, ui.template, ui.start, ui.width, ui.step, ui.scope]) field.disabled = !rule;
+    for (const field of [ui.label, ui.match, ui.template, ui.start, ui.width, ui.step, ui.scope, ui.groupBy]) field.disabled = !rule;
     ui.remove.disabled = !rule;
     ui.label.value = rule?.label || "";
     ui.match.value = rule?.match || "";
@@ -61,6 +62,8 @@ export function createPatternStudio({ getRoot, getProfile, onSave, notify }) {
     ui.width.value = String(n.width);
     ui.step.value = String(n.step);
     ui.scope.value = n.scope;
+    ui.groupByRow.hidden = !numbered || n.scope !== "custom";
+    ui.groupBy.value = n.groupBy || "";
   }
   function renderTree(paths) {
     ui.tree.replaceChildren();
@@ -123,7 +126,8 @@ export function createPatternStudio({ getRoot, getProfile, onSave, notify }) {
     try {
       validateProfile(draft);
       const enriched = records.map(record => ({ ...record, pageId: readPageId(record.source, draft) }));
-      const matchedPaths = enriched.filter(record => record.pageId.status === "placeholder").map(record => record.path);
+      const matchedPaths = enriched.filter(record => record.pageId.status === "placeholder" &&
+        isSeoEligible(record.source, draft.seoAttribute)).map(record => record.path);
       const result = planBulkPageIds(enriched, new Set(matchedPaths), draft);
       const collisions = validateRuleMatches(enriched.map(record => record.path), draft.rules);
       const errors = [...new Set([...result.errors, ...collisions])];
@@ -138,7 +142,8 @@ export function createPatternStudio({ getRoot, getProfile, onSave, notify }) {
         ui.preview.append(row);
       }
       const unmatched = enriched.filter(record => {
-        try { return !classifyPage(record.path, draft.rules) && record.pageId.status === "placeholder"; }
+        try { return isSeoEligible(record.source, draft.seoAttribute) &&
+          !classifyPage(record.path, draft.rules) && record.pageId.status === "placeholder"; }
         catch { return false; }
       }).length;
       if (errors.length) setFeedback(errors.slice(0, 5).join(" · ") + (errors.length > 5 ? " · and " + (errors.length - 5) + " more" : ""), "error");
@@ -214,7 +219,11 @@ export function createPatternStudio({ getRoot, getProfile, onSave, notify }) {
   for (const [control, key] of [[ui.start, "start"], [ui.width, "width"], [ui.step, "step"]]) {
     control.addEventListener("input", () => updateNumber(key, Number(control.value)));
   }
-  ui.scope.addEventListener("change", () => updateNumber("scope", ui.scope.value));
+  ui.scope.addEventListener("change", () => {
+    updateNumber("scope", ui.scope.value);
+    renderRuleForm();
+  });
+  ui.groupBy.addEventListener("input", () => updateNumber("groupBy", ui.groupBy.value));
   for (const [control, key] of [[ui.seoAttribute, "seoAttribute"], [ui.metaName, "pageIdMetaName"], [ui.placeholder, "pageIdPlaceholder"], [ui.rootHint, "sourceRoot"]]) {
     control.addEventListener("input", () => saveField(key, control.value));
   }

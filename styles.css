@@ -424,7 +424,7 @@ h1 { margin: 0; font-size: clamp(25px, 4vw, 34px); line-height: 1.2; letter-spac
 .id-actions--foot { margin-top: 16px; justify-content: flex-end; }
 .id-option { display: flex; align-items: center; gap: 10px; padding: 10px; border-bottom: 1px solid var(--line); }
 .id-option:last-child { border-bottom: 0; }
-.id-option--filled { opacity: .55; }
+.id-option--filled .id-option-details, .id-option--filled .id-option-checkbox { opacity: .48; }
 .id-option--filled .id-edit-button { opacity: 1; }
 .id-option-checkbox { flex: 0 0 auto; width: 16px; height: 16px; accent-color: var(--cyan); }
 .id-option-details { min-width: 0; flex: 1; display: grid; gap: 4px; }
