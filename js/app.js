@@ -355,9 +355,36 @@ function handleDonePageSelection() {
   showToast(selectedPagePaths.size + (selectedPagePaths.size === 1 ? " page selected." : " pages selected."));
 }
 
-function handlePageMetadataNavigation() {
+async function refreshLocalBranchSnapshot() {
+  if (!activeDirectoryHandle) return;
+
+  const permission = await ensureRepositoryPermission(activeDirectoryHandle, false);
+  if (permission !== "granted") {
+    throw new Error("Repository access needs to be restored before the local branch and page list can be refreshed.");
+  }
+
+  const previousSelection = elements.branchSelect.value;
+  const refreshedInfo = await discoverLocalBranches(activeDirectoryHandle);
+  renderRepository(refreshedInfo, previousSelection);
+
+  const refreshedSelection = elements.branchSelect.value;
+  if (refreshedSelection && refreshedSelection !== previousSelection) {
+    await saveSelectedBranch(refreshedSelection);
+  }
+}
+
+async function handlePageMetadataNavigation() {
   setActiveView("metadata");
-  loadPages();
+
+  try {
+    await refreshLocalBranchSnapshot();
+  } catch (error) {
+    console.error("Could not refresh local branch metadata:", error);
+    setPageScanStatus(error instanceof Error ? error.message : "Could not refresh the local repository.", "warning");
+    return;
+  }
+
+  await loadPages();
 }
 
 async function restoreSavedWorkspace() {
