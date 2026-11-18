@@ -1,43 +1,14 @@
-const IGNORED_DIRECTORY_NAMES = new Set([".git", "node_modules"]);
-const MAX_SCAN_DEPTH = 32;
+import { walkHtmlFiles } from "./file-tree.js";
+import { isSeoEligible } from "./seo-eligibility.js";
 
-async function scanDirectory(directoryHandle, parentPath = "", depth = 0, pages = []) {
-  if (depth > MAX_SCAN_DEPTH) {
-    throw new Error("The repository folder structure is nested too deeply to scan safely.");
+/** Read eligible source pages; the UI independently manages selected checkboxes. */
+export async function discoverHtmlPages(repositoryHandle, options = {}) {
+  const files = await walkHtmlFiles(repositoryHandle);
+  const pages = [];
+  for (const file of files) {
+    const source = await (await file.handle.getFile()).text();
+    if (!isSeoEligible(source, options.seoAttribute || "data-luxraj-seo")) continue;
+    pages.push({ name: file.name, path: file.path, directory: file.directory });
   }
-
-  for await (const [entryName, entryHandle] of directoryHandle.entries()) {
-    if (entryHandle.kind === "directory") {
-      if (IGNORED_DIRECTORY_NAMES.has(entryName)) continue;
-      const nextPath = parentPath ? parentPath + "/" + entryName : entryName;
-      await scanDirectory(entryHandle, nextPath, depth + 1, pages);
-      continue;
-    }
-
-    if (entryHandle.kind !== "file") continue;
-    const lowerName = entryName.toLowerCase();
-    if (!lowerName.endsWith(".html") && !lowerName.endsWith(".htm")) continue;
-
-    const relativePath = parentPath ? parentPath + "/" + entryName : entryName;
-    pages.push({
-      name: entryName,
-      path: relativePath,
-      directory: parentPath || ".",
-    });
-  }
-
   return pages;
-}
-
-/**
- * Discover HTML documents in the currently selected local working tree.
- * This is a filesystem scan, not a Git branch/tree lookup.
- */
-export async function discoverHtmlPages(repositoryHandle) {
-  if (!repositoryHandle || typeof repositoryHandle.entries !== "function") {
-    throw new Error("Connect a local repository folder before scanning its pages.");
-  }
-
-  const pages = await scanDirectory(repositoryHandle);
-  return pages.sort((a, b) => a.path.localeCompare(b.path, undefined, { sensitivity: "base" }));
 }
